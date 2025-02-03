@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customizable Lab System</title>
+    <style>
+        .block {
+            width: 120px;
+            height: 60px;
+            text-align: center;
+            line-height: 60px;
+            font-weight: bold;
+            cursor: move;
+            border: 2px solid black;
+            border-radius: 10px;
+            position: absolute;
+        }
+        .open { background-color: green; color: white; }
+        .closed { background-color: red; color: white; }
+        .pump { background-color: orange; color: white; }
+        .valve { background-color: blue; color: white; }
+        .pipe { background-color: gray; color: white; width: 80px; height: 20px; transform: rotate(0deg); }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border: 2px solid black;
+        }
+    </style>
+<script>
+    let blockCounter = 0;
+    let diagramData = [];
+
+    function addBlock() {
+        const blockNames = [
+            "Kugelhahn", "Butterfly Valve", "Dosage Valve", "Mini Gate Valve", "Corner Valve", 
+            "Pneumatic Valve", "Pressure gauge", "He Tank", "1K pot", "Blind Flange", 
+            "Scroll pump", "Turbo Pump", "Pre-pump", "Getter Pump"
+        ];
+        
+        let selectedBlock = prompt("Enter block name:\n" + blockNames.join("\n"));
+        if (blockNames.includes(selectedBlock)) {
+            let container = document.getElementById("container");
+            let block = document.createElement("div");
+            block.classList.add("block", "closed");
+            block.innerText = selectedBlock;
+            block.style.left = Math.random() * 80 + "%";
+            block.style.top = Math.random() * 80 + "%";
+            block.id = "block" + blockCounter++;
+            block.draggable = true;
+            block.addEventListener("dragstart", drag);
+            block.addEventListener("contextmenu", (e) => removeBlock(e, block.id));
+            block.addEventListener("click", () => toggleState(block));
+            container.appendChild(block);
+        } else {
+            alert("Invalid block name. Please choose from the list.");
+        }
+    }
+
+    function addPipe() {
+        let container = document.getElementById("container");
+        let block = document.createElement("div");
+        block.classList.add("block", "pipe");
+        block.innerText = "Pipe";
+        block.style.left = Math.random() * 80 + "%";
+        block.style.top = Math.random() * 80 + "%";
+        block.id = "block" + blockCounter++;
+        block.draggable = true;
+        block.addEventListener("dragstart", drag);
+        block.addEventListener("contextmenu", (e) => removeBlock(e, block.id));
+        container.appendChild(block);
+        addPipeControls(block.id);
+    }
+
+    function addPipeControls(pipeId) {
+        let controls = document.createElement("div");
+        controls.classList.add("control-" + pipeId);
+        controls.innerHTML = `<label>Rotate:</label>
+                             <input type='range' min='0' max='360' value='0' onchange='rotatePipe("${pipeId}", this.value)'>
+                             <label>Length:</label>
+                             <input type='range' min='50' max='300' value='80' onchange='resizePipe("${pipeId}", this.value)'>`;
+        document.body.appendChild(controls);
+    }
+
+    function rotatePipe(pipeId, angle) {
+        document.getElementById(pipeId).style.transform = `rotate(${angle}deg)`;
+    }
+
+    function resizePipe(pipeId, length) {
+        document.getElementById(pipeId).style.width = `${length}px`;
+    }
+
+    function toggleState(block) {
+        if (block.classList.contains("closed")) {
+            block.classList.remove("closed");
+            block.classList.add("open");
+        } else {
+            block.classList.remove("open");
+            block.classList.add("closed");
+        }
+    }
+
+    function allowDrop(event) {
+        event.preventDefault();
+    }
+
+    function drag(event) {
+        event.dataTransfer.setData("text", event.target.id);
+        event.dataTransfer.setData("offsetX", event.clientX - event.target.getBoundingClientRect().left);
+        event.dataTransfer.setData("offsetY", event.clientY - event.target.getBoundingClientRect().top);
+    }
+
+    function drop(event) {
+        event.preventDefault();
+        let blockId = event.dataTransfer.getData("text");
+        let offsetX = event.dataTransfer.getData("offsetX");
+        let offsetY = event.dataTransfer.getData("offsetY");
+        let block = document.getElementById(blockId);
+        let container = document.getElementById("container").getBoundingClientRect();
+        block.style.left = (event.clientX - container.left - offsetX) + "px";
+        block.style.top = (event.clientY - container.top - offsetY) + "px";
+    }
+
+    function removeBlock(event, blockId) {
+        event.preventDefault();
+        let block = document.getElementById(blockId);
+        let controls = document.querySelector(".control-" + blockId);
+        if (controls) controls.remove();
+        block.parentNode.removeChild(block);
+    }
+
+    function saveMetaData() {
+        diagramData = [];
+        document.querySelectorAll(".block").forEach(block => {
+            diagramData.push({
+                type: block.innerText,
+                left: block.style.left,
+                top: block.style.top,
+                state: block.classList.contains("open") ? "on" : "off",
+                width: block.style.width || "120px",
+                transform: block.style.transform || "rotate(0deg)",
+                backgroundColor: block.style.backgroundColor || "gray"
+            });
+        });
+        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(diagramData));
+        let downloadAnchor = document.createElement("a");
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "diagram_metadata.json");
+        downloadAnchor.click();
+    }
+</script>
+</head>
+<body>
+    <h2>Customizable Lab System</h2>
+    <button onclick="addBlock()">Blocks</button>
+    <button onclick="addPipe()">Add Pipe</button>
+    <button onclick="saveMetaData()">Save Diagram</button>
+    <div id="container" class="container" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+</body>
+</html>
