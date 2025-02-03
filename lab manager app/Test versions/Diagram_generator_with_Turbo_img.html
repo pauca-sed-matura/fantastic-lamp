@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Customizable Lab System (Separate Label Tab)</title>
+  <style>
+    .block {
+      width: 60px;
+      text-align: center;
+      font-weight: bold;
+      cursor: move;
+      border: 2px solid black;
+      border-radius: 10px;
+      position: absolute;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    .open { 
+      background-color: green; 
+      color: white; 
+    }
+    .closed { 
+      background-color: red; 
+      color: white; 
+    }
+
+    .pump { background-color: orange; color: white; }
+    .valve { background-color: blue; color: white; }
+
+    .pipe {
+      background-color: gray;
+      color: white;
+      width: 80px;      /* default width */
+      height: 20px;     /* default height */
+      transform: rotate(0deg);
+    }
+
+    /* A distinct class for standalone labels */
+    .label-block {
+      border: 1px dashed #999; /* So it looks more like a label */
+      width: auto; 
+      min-width: 50px;
+      height: auto;
+      padding: 5px;
+      background-color: #fffcdd; /* Light yellow background for clarity */
+    }
+
+    .container {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      border: 2px solid black;
+    }
+
+    /* Keep images aspect-ratio correct. */
+    .block img {
+      max-width: 100%;
+      height: auto;
+      pointer-events: none; 
+      user-select: none;
+    }
+  </style>
+
+  <script>
+    let blockCounter = 0;
+    let diagramData = [];
+
+    // Turbo Pump uses two separate images (off/on)
+    const blockImages = {
+      "Turbo Pump": {
+        off: "images/turbo_pump_off.png",
+        on:  "images/turbo_pump_on.png"
+      }
+    };
+
+    function addBlock() {
+      const blockNames = [
+        "Kugelhahn", "Butterfly Valve", "Dosage Valve", "Mini Gate Valve", "Corner Valve", 
+        "Pneumatic Valve", "Pressure gauge", "He Tank", "1K pot", "Blind Flange", 
+        "Scroll pump", "Turbo Pump", "Pre-pump", "Getter Pump"
+      ];
+      
+      let selectedBlock = prompt("Enter block name:\n" + blockNames.join("\n"));
+      if (blockNames.includes(selectedBlock)) {
+        let container = document.getElementById("container");
+        let block = document.createElement("div");
+        block.classList.add("block", "closed"); // default to 'closed' red state
+
+        if (blockImages[selectedBlock]) {
+          // If it's a Turbo Pump, use our on/off images
+          block.innerHTML = `
+            <img src="${blockImages[selectedBlock].off}" 
+                 alt="${selectedBlock}" 
+                 style="max-width:100%; height:auto;" 
+                 draggable="false">
+          `;
+        } else {
+          // Otherwise, just text
+          block.innerText = selectedBlock;
+        }
+
+        // Random position
+        block.style.left = Math.random() * 80 + "%";
+        block.style.top = Math.random() * 80 + "%";
+        block.id = "block" + blockCounter++;
+        block.draggable = true;
+
+        // Attach event listeners
+        block.addEventListener("dragstart", drag);
+        block.addEventListener("contextmenu", (e) => removeBlock(e, block.id));
+        block.addEventListener("click", () => toggleState(block));
+
+        container.appendChild(block);
+      } else {
+        alert("Invalid block name. Please choose from the list.");
+      }
+    }
+
+    // Creates a pipe without a label, as requested
+    function addPipe() {
+      let container = document.getElementById("container");
+      let block = document.createElement("div");
+      block.classList.add("block", "pipe");
+
+      // Random position
+      block.style.left = Math.random() * 80 + "%";
+      block.style.top = Math.random() * 80 + "%";
+      block.id = "block" + blockCounter++;
+      block.draggable = true;
+      block.addEventListener("dragstart", drag);
+      block.addEventListener("contextmenu", (e) => removeBlock(e, block.id));
+      container.appendChild(block);
+
+      addPipeControls(block.id);
+    }
+
+    // A new function to add a standalone label block
+    function addLabel() {
+      let labelText = prompt("Enter label text:");
+      if (labelText !== null && labelText.trim() !== "") {
+        let container = document.getElementById("container");
+        let labelBlock = document.createElement("div");
+        labelBlock.classList.add("block", "label-block");
+        labelBlock.innerText = labelText;
+
+        // Position randomly or (optionally) at a default top-left
+        labelBlock.style.left = Math.random() * 80 + "%";
+        labelBlock.style.top = Math.random() * 80 + "%";
+        labelBlock.id = "block" + blockCounter++;
+        labelBlock.draggable = true;
+
+        // Basic event listeners
+        labelBlock.addEventListener("dragstart", drag);
+        labelBlock.addEventListener("contextmenu", (e) => removeBlock(e, labelBlock.id));
+
+        container.appendChild(labelBlock);
+      }
+    }
+
+    // Create rotation & length controls for pipes
+    function addPipeControls(pipeId) {
+      let controls = document.createElement("div");
+      controls.classList.add("control-" + pipeId);
+      controls.innerHTML = `
+        <label>Rotate:</label>
+        <input type="range" 
+               min="0" 
+               max="360" 
+               value="0"
+               oninput="
+                 document.getElementById('${pipeId}-rotate-number').value = this.value; 
+                 rotatePipe('${pipeId}', this.value)"
+               id="${pipeId}-rotate-range">
+
+        <input type="number"
+               min="0" 
+               max="360" 
+               value="0"
+               oninput="
+                 document.getElementById('${pipeId}-rotate-range').value = this.value; 
+                 rotatePipe('${pipeId}', this.value)"
+               id="${pipeId}-rotate-number">
+
+        <label>Length:</label>
+        <input type="range" 
+               min="50" 
+               max="300" 
+               value="80" 
+               oninput="
+                 document.getElementById('${pipeId}-length-number').value = this.value; 
+                 resizePipe('${pipeId}', this.value)"
+               id="${pipeId}-length-range">
+
+        <input type="number"
+               min="50" 
+               max="300" 
+               value="80"
+               oninput="
+                 document.getElementById('${pipeId}-length-range').value = this.value;
+                 resizePipe('${pipeId}', this.value)"
+               id="${pipeId}-length-number">
+      `;
+      document.body.appendChild(controls);
+    }
+
+    function rotatePipe(pipeId, angle) {
+      document.getElementById(pipeId).style.transform = `rotate(${angle}deg)`;
+    }
+
+    function resizePipe(pipeId, length) {
+      document.getElementById(pipeId).style.width = `${length}px`;
+    }
+
+    /*
+     * Toggle block's open/closed state.
+     * If it's a Turbo Pump with an <img>, swap the image from off -> on or on -> off.
+     */
+    function toggleState(block) {
+      const isClosed = block.classList.contains("closed");
+      if (isClosed) {
+        block.classList.remove("closed");
+        block.classList.add("open");
+      } else {
+        block.classList.remove("open");
+        block.classList.add("closed");
+      }
+
+      // If block has an <img> from blockImages, let's swap images for Turbo Pump
+      const imgElem = block.querySelector("img");
+      if (imgElem) {
+        const blockName = imgElem.alt;  // e.g. "Turbo Pump"
+        if (blockImages[blockName]) {
+          // If it was closed, now it's open -> show the 'on' image
+          if (isClosed) {
+            imgElem.src = blockImages[blockName].on;
+          } else {
+            // If it was open, now it's closed -> show the 'off' image
+            imgElem.src = blockImages[blockName].off;
+          }
+        }
+      }
+    }
+
+    // Drag-and-drop mechanics
+    function allowDrop(event) {
+      event.preventDefault();
+    }
+
+    function drag(event) {
+      event.dataTransfer.setData("text", event.target.id);
+      event.dataTransfer.setData("offsetX", event.clientX - event.target.getBoundingClientRect().left);
+      event.dataTransfer.setData("offsetY", event.clientY - event.target.getBoundingClientRect().top);
+    }
+
+    function drop(event) {
+      event.preventDefault();
+      let blockId = event.dataTransfer.getData("text");
+      let offsetX = event.dataTransfer.getData("offsetX");
+      let offsetY = event.dataTransfer.getData("offsetY");
+      let block = document.getElementById(blockId);
+      let containerRect = document.getElementById("container").getBoundingClientRect();
+      block.style.left = (event.clientX - containerRect.left - offsetX) + "px";
+      block.style.top = (event.clientY - containerRect.top - offsetY) + "px";
+    }
+
+    // Removes a block or label (triggered by context menu - right-click)
+    function removeBlock(event, blockId) {
+      event.preventDefault();
+      let block = document.getElementById(blockId);
+      let controls = document.querySelector(".control-" + blockId);
+      if (controls) controls.remove();
+      block.parentNode.removeChild(block);
+    }
+
+    // Save diagram to JSON
+    function saveMetaData() {
+      diagramData = [];
+      document.querySelectorAll(".block").forEach(block => {
+        let blockName = block.innerText; // default if no image
+        let imgSrc = "";
+        let labelType = "block"; // default type
+
+        // Distinguish if it's a label block
+        if (block.classList.contains("label-block")) {
+          labelType = "label"; 
+        }
+
+        // If we have an <img>, we derive name from alt
+        const imgElem = block.querySelector("img");
+        if (imgElem) {
+          blockName = imgElem.alt;
+          imgSrc = imgElem.src;
+        }
+
+        diagramData.push({
+          itemType: labelType,  // "block", "pipe", or "label"
+          textOrName: blockName,
+          left: block.style.left,
+          top: block.style.top,
+          state: block.classList.contains("open") ? "on" : "off",
+          width: block.style.width || "120px",
+          transform: block.style.transform || "rotate(0deg)",
+          image: imgSrc
+        });
+      });
+
+      let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(diagramData));
+      let downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "diagram_metadata.json");
+      downloadAnchor.click();
+    }
+  </script>
+</head>
+<body>
+  <h2>Customizable Lab System</h2>
+  <button onclick="addBlock()">Add Block</button>
+  <button onclick="addPipe()">Add Pipe</button>
+  <!-- New button to add a label block -->
+  <button onclick="addLabel()">Add Label</button>
+  <button onclick="saveMetaData()">Save Diagram</button>
+
+  <div id="container" class="container" 
+       ondrop="drop(event)" 
+       ondragover="allowDrop(event)">
+  </div>
+</body>
+</html>
